@@ -226,7 +226,7 @@ async function LawReaderSection({
   const supabase = await createClient();
 
   // Fire all initial queries in parallel (1 RTT instead of 2)
-  const [{ count: totalPasalCount }, { data: structure }, { data: initialPasals }, { data: rels }] = await Promise.all([
+  const [{ count: totalPasalCount }, { data: structure }, { data: initialPasals }, { data: rels }, { data: leadNodes }] = await Promise.all([
     supabase
       .from("document_nodes")
       .select("id", { count: "exact", head: true })
@@ -250,12 +250,19 @@ async function LawReaderSection({
       .select("*, relationship_types(code, name_id, name_en)")
       .or(`source_work_id.eq.${workId},target_work_id.eq.${workId}`)
       .order("id"),
+    supabase
+      .from("document_nodes")
+      .select("id, node_type, number, heading, content_text, sort_order")
+      .eq("work_id", workId)
+      .in("node_type", ["preamble", "content"])
+      .order("sort_order"),
   ]);
 
   const usePagination = (totalPasalCount || 0) >= 100;
   const structuralNodes = structure;
   let pasalNodes = initialPasals;
   const relationships = rels;
+  const leadContentNodes = leadNodes || [];
   let fallbackContentNodes: Array<{
     id: number;
     node_type: string;
@@ -313,6 +320,21 @@ async function LawReaderSection({
 
   const mainContent = (
     <>
+      {allPasals.length > 0 && leadContentNodes.length > 0 && (
+        <section className="space-y-4 mb-6 sm:mb-10">
+          {leadContentNodes.map((node) => (
+            <article key={node.id} id={`node-${node.id}`} className="rounded-lg border p-5 scroll-mt-20">
+              <h3 className="font-heading text-base mb-2">
+                {node.heading || node.node_type.replaceAll("_", " ").toUpperCase()}
+              </h3>
+              <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                {node.content_text || ""}
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
+
       {babNodes.length > 0 ? (
         babNodes.map((bab) => {
           // Filter pasals for this BAB
@@ -330,11 +352,19 @@ async function LawReaderSection({
             <section key={bab.id} id={`bab-${bab.number}`} className="mb-6 sm:mb-12 scroll-mt-20">
               <div className="group flex justify-center items-center gap-2 mb-1">
                 <h2 className="font-heading text-xl">
-                  {bab.node_type === "aturan" ? bab.number : bab.node_type === "lampiran" ? "LAMPIRAN" : `BAB ${bab.number}`}
+                  {bab.node_type === "aturan"
+                    ? bab.number
+                    : bab.node_type === "lampiran"
+                      ? "LAMPIRAN"
+                      : bab.node_type === "bagian"
+                        ? (bab.heading || `Kamar ${bab.number}`)
+                        : bab.node_type === "paragraf"
+                          ? `Paragraf ${bab.number}`
+                          : `BAB ${bab.number}`}
                 </h2>
                 <SectionLinkButton url={`${pageUrl}#bab-${bab.number}`} />
               </div>
-              {bab.heading && bab.node_type !== "aturan" && bab.node_type !== "lampiran" && (
+              {bab.heading && bab.node_type === "bab" && (
                 <p className="text-center text-base font-heading text-muted-foreground mb-3 sm:mb-6">
                   {bab.heading}
                 </p>
@@ -393,7 +423,13 @@ async function LawReaderSection({
 
   return (
     <ReaderLayout
-      toc={<TableOfContents babs={babNodes} pasals={allPasals} fallbackNodes={fallbackContentNodes} />}
+      toc={
+        <TableOfContents
+          babs={babNodes}
+          pasals={allPasals}
+          fallbackNodes={allPasals.length > 0 ? leadContentNodes : fallbackContentNodes}
+        />
+      }
       content={
         <>
           <HashHighlighter />

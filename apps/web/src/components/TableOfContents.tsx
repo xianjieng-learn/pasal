@@ -19,6 +19,14 @@ interface FallbackTocNode {
   heading: string | null;
 }
 
+function sectionTitle(node: TocNode): string {
+  if (node.node_type === "aturan") return node.number;
+  if (node.node_type === "lampiran") return "LAMPIRAN";
+  if (node.node_type === "bagian") return node.heading || `Kamar ${node.number}`;
+  if (node.node_type === "paragraf") return `Paragraf ${node.number}`;
+  return `BAB ${node.number}`;
+}
+
 function TocContent({
   babs,
   pasals,
@@ -93,6 +101,26 @@ function TocContent({
 
   return (
     <ul className="space-y-1 text-sm">
+      {(fallbackNodes || []).map((node, idx) => {
+        const anchorId = `node-${node.id}`;
+        const isActive = activeId === anchorId;
+        return (
+          <li key={`lead-${node.id}`}>
+            <a
+              href={`#${anchorId}`}
+              onClick={onNavigate}
+              data-toc-id={anchorId}
+              className={`block py-1 rounded transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
+                isActive
+                  ? "text-foreground border-l-2 border-primary pl-2"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {node.heading || `${node.node_type.replaceAll("_", " ").toUpperCase()} ${idx + 1}`}
+            </a>
+          </li>
+        );
+      })}
       {babs.map((bab) => {
         const babPasals = pasals.filter((p) => p.parent_id === bab.id);
         const babAnchorId = `bab-${bab.number}`;
@@ -110,8 +138,8 @@ function TocContent({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {bab.node_type === "aturan" ? bab.number : bab.node_type === "lampiran" ? "LAMPIRAN" : `BAB ${bab.number}`}
-              {bab.heading && bab.node_type !== "aturan" && bab.node_type !== "lampiran" && (
+              {sectionTitle(bab)}
+              {bab.heading && bab.node_type === "bab" && (
                 <span className="block text-xs font-normal truncate">
                   {bab.heading}
                 </span>
@@ -134,7 +162,7 @@ function TocContent({
                             : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
-                        {pasalPrefix} {pasal.number}
+                        {bab.node_type === "bagian" ? `Rumusan ${pasal.number}` : `${pasalPrefix} ${pasal.number}`}
                       </a>
                     </li>
                   );
