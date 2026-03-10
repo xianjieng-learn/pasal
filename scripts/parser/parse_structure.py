@@ -26,6 +26,14 @@ PASAL_RE = re.compile(r'^Pasal[ \t]+(\d+[A-Z]?)\s*$', re.MULTILINE)
 PENJELASAN_RE = re.compile(r'^\s*PENJELASAN\s*$', re.MULTILINE)
 LAMPIRAN_RE = re.compile(r'^\s*LAMPIRAN\s*$', re.MULTILINE)
 
+# SEMA / Rumusan pleno kamar style sections
+KAMAR_RE = re.compile(
+    r'^\s*(?:KAMAR\s+)?(PERDATA|PIDANA|AGAMA|TUN|MILITER|TATA\s+USAHA\s+NEGARA)\s*$',
+    re.MULTILINE | re.IGNORECASE,
+)
+RUMUSAN_NUM_RE = re.compile(r'^\s*(?:RUMUSAN\s+)?(?:\(?\s*(\d{1,3})\s*\)|\s*(\d{1,3})[\.)])\s+', re.MULTILINE | re.IGNORECASE)
+RUMUSAN_PREAMBLE_HINT_RE = re.compile(r'RUMUSAN\s+HASIL\s+RAPAT\s+PLENO\s+KAMAR', re.IGNORECASE)
+
 # UUD 1945 special sections: ATURAN PERALIHAN and ATURAN TAMBAHAN
 # These act as top-level sections (like BAB) but without BAB numbering.
 ATURAN_RE = re.compile(r'^(ATURAN\s+PERALIHAN|ATURAN\s+TAMBAHAN)\s*$', re.MULTILINE)
@@ -415,6 +423,102 @@ def _parse_body_text(text: str, sort_offset: int = 0) -> tuple[list[dict], int]:
     return nodes, sort_order
 
 
+def _normalize_kamar_name(raw: str) -> str:
+    cleaned = ' '.join(raw.upper().split())
+    if cleaned == 'TATA USAHA NEGARA':
+        return 'TUN'
+    return cleaned
+
+
+def _split_rumusan_items(content: str) -> list[tuple[str, str]]:
+    """Split kamar content into numbered rumusan items.
+
+    Returns list of (number, text). Falls back to a single item when no numbering is found.
+    """
+    matches = list(RUMUSAN_NUM_RE.finditer(content))
+    if not matches:
+        txt = content.strip()
+        return [("1", txt)] if txt else []
+
+    items: list[tuple[str, str]] = []
+    for i, m in enumerate(matches):
+        next_start = matches[i + 1].start() if i + 1 < len(matches) else len(content)
+        num = m.group(1) or m.group(2) or str(i + 1)
+        body = content[m.end():next_start].strip()
+        if body:
+            items.append((num, body))
+    return items
+
+
+def _is_pleno_kamar_document(text: str) -> bool:
+    """Heuristic detector for SEMA/SK KMA style plenary-rumusan documents."""
+    if RUMUSAN_PREAMBLE_HINT_RE.search(text):
+        return True
+
+    kamar_count = len(list(KAMAR_RE.finditer(text)))
+    has_numbered_rumusan = bool(RUMUSAN_NUM_RE.search(text))
+    has_bab = bool(BAB_RE.search(text))
+    return kamar_count >= 2 and has_numbered_rumusan and not has_bab
+
+
+def _parse_pleno_kamar(text: str) -> list[dict]:
+    """Parse plenary-rumusan structure: preamble -> kamar -> rumusan items.
+
+    Uses existing node types for DB compatibility:
+    - kamar => bagian
+    - rumusan => pasal
+    """
+    nodes: list[dict] = []
+    sort_order = 0
+    kamar_matches = list(KAMAR_RE.finditer(text))
+
+    if not kamar_matches:
+        return []
+
+    preamble = text[:kamar_matches[0].start()].strip()
+    if preamble:
+        nodes.append({
+            "type": "preamble",
+            "number": "",
+            "heading": "",
+            "content": _rejoin_content_lines(preamble),
+            "children": [],
+            "sort_order": sort_order,
+        })
+        sort_order += 1
+
+    for i, km in enumerate(kamar_matches):
+        kamar_name = _normalize_kamar_name(km.group(1))
+        next_start = kamar_matches[i + 1].start() if i + 1 < len(kamar_matches) else len(text)
+        kamar_body = text[km.end():next_start].strip()
+        rumusan_items = _split_rumusan_items(kamar_body)
+
+        kamar_node = {
+            "type": "bagian",
+            "number": kamar_name,
+            "heading": f"Kamar {kamar_name}",
+            "content": "",
+            "children": [],
+            "sort_order": sort_order,
+        }
+        sort_order += 1
+
+        for num, body in rumusan_items:
+            kamar_node["children"].append({
+                "type": "pasal",
+                "number": num,
+                "heading": f"Rumusan {num}",
+                "content": _rejoin_content_lines(body),
+                "children": [],
+                "sort_order": sort_order,
+            })
+            sort_order += 1
+
+        nodes.append(kamar_node)
+
+    return nodes
+
+
 def parse_structure(text: str) -> list[dict]:
     """Parse law text into hierarchical node structure.
 
@@ -427,6 +531,10 @@ def parse_structure(text: str) -> list[dict]:
     """
     # Pre-process: fix Roman numeral Pasals (OCR artifact)
     text = _fix_roman_pasals(text)
+
+    # SEMA / plenary-rumusan docs should be grouped by kamar, not BAB.
+    if _is_pleno_kamar_document(text):
+        return _parse_pleno_kamar(text)
 
     # Split off penjelasan
     penjelasan_match = PENJELASAN_RE.search(text)
