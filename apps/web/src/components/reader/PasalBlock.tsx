@@ -17,23 +17,33 @@ interface PasalBlockProps {
   pasal: PasalNode;
   pathname: string;
   pageUrl: string;
+  itemPrefix?: string;
+  anchorById?: boolean;
 }
 
-export default function PasalBlock({ pasal, pathname, pageUrl }: PasalBlockProps) {
+export default function PasalBlock({
+  pasal,
+  pathname,
+  pageUrl,
+  itemPrefix,
+  anchorById = false,
+}: PasalBlockProps) {
   const t = useTranslations("reader");
   const content = pasal.content_text || "";
   const koreksiHref = `${pathname}/koreksi/${pasal.id}`;
+  const anchorId = anchorById ? `pasal-${pasal.id}` : `pasal-${pasal.number}`;
+  const prefix = itemPrefix || t("pasalPrefix");
 
   return (
     <article
-      id={`pasal-${pasal.number}`}
+      id={anchorId}
       data-pdf-page={pasal.pdf_page_start ?? undefined}
       className="mb-4 sm:mb-8 scroll-mt-20"
     >
       <div className="flex items-center justify-between mb-2">
         <h3 className="flex items-center gap-1.5 font-heading text-base">
           <PasalLogo size={18} className="text-primary/60" />
-          {t("pasalPrefix")} {pasal.number}
+          {prefix} {pasal.number}
         </h3>
         <div className="flex items-center gap-1.5 no-print">
           <Link
@@ -44,7 +54,7 @@ export default function PasalBlock({ pasal, pathname, pageUrl }: PasalBlockProps
             <Pencil className="h-3.5 w-3.5 sm:h-3 sm:w-3" aria-hidden="true" />
             <span className="hidden sm:inline">{t("correction")}</span>
           </Link>
-          <CopyButton text={`${pageUrl}#pasal-${pasal.number}`} label="Link" icon={<Link2 className="h-3 w-3" aria-hidden="true" />} />
+          <CopyButton text={`${pageUrl}#${anchorId}`} label="Link" icon={<Link2 className="h-3 w-3" aria-hidden="true" />} />
           <CopyButton text={content} />
         </div>
       </div>

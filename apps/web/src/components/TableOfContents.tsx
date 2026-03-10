@@ -34,6 +34,8 @@ function TocContent({
   activeId,
   onNavigate,
   pasalPrefix,
+  pasalAnchorById,
+  pasalItemPrefix,
   moreArticlesLabel,
 }: {
   babs: TocNode[];
@@ -42,8 +44,18 @@ function TocContent({
   activeId?: string | null;
   onNavigate?: () => void;
   pasalPrefix: string;
+  pasalAnchorById?: boolean;
+  pasalItemPrefix?: string;
   moreArticlesLabel: (count: number) => string;
 }) {
+  const pasalAnchor = (pasal: TocNode) =>
+    pasalAnchorById ? `pasal-${pasal.id}` : `pasal-${pasal.number}`;
+  const pasalLabel = (pasal: TocNode, parent: TocNode | null) => {
+    if (pasalItemPrefix) return `${pasalItemPrefix} ${pasal.number}`;
+    if (parent?.node_type === "bagian") return `Rumusan ${pasal.number}`;
+    return `${pasalPrefix} ${pasal.number}`;
+  };
+
   // When there are no BABs, show pasals directly
   if (babs.length === 0) {
     if (pasals.length === 0) {
@@ -76,7 +88,7 @@ function TocContent({
     return (
       <ul className="space-y-1 text-sm">
         {pasals.map((pasal) => {
-          const anchorId = `pasal-${pasal.number}`;
+          const anchorId = pasalAnchor(pasal);
           const isActive = activeId === anchorId;
           return (
             <li key={pasal.id}>
@@ -90,7 +102,7 @@ function TocContent({
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {pasalPrefix} {pasal.number}
+                {pasalLabel(pasal, null)}
               </a>
             </li>
           );
@@ -148,7 +160,7 @@ function TocContent({
             {babPasals.length > 0 && (
               <ul className="ml-3 space-y-0.5">
                 {babPasals.slice(0, 10).map((pasal) => {
-                  const pasalAnchorId = `pasal-${pasal.number}`;
+                  const pasalAnchorId = pasalAnchor(pasal);
                   const isPasalActive = activeId === pasalAnchorId;
                   return (
                     <li key={pasal.id}>
@@ -162,7 +174,7 @@ function TocContent({
                             : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
-                        {bab.node_type === "bagian" ? `Rumusan ${pasal.number}` : `${pasalPrefix} ${pasal.number}`}
+                        {pasalLabel(pasal, bab)}
                       </a>
                     </li>
                   );
@@ -185,10 +197,14 @@ export default function TableOfContents({
   babs,
   pasals,
   fallbackNodes = [],
+  pasalAnchorById = false,
+  pasalItemPrefix,
 }: {
   babs: TocNode[];
   pasals: TocNode[];
   fallbackNodes?: FallbackTocNode[];
+  pasalAnchorById?: boolean;
+  pasalItemPrefix?: string;
 }) {
   const t = useTranslations("toc");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -293,6 +309,8 @@ export default function TableOfContents({
           fallbackNodes={fallbackNodes}
           activeId={activeId}
           pasalPrefix={pasalPrefix}
+          pasalAnchorById={pasalAnchorById}
+          pasalItemPrefix={pasalItemPrefix}
           moreArticlesLabel={moreArticlesLabel}
         />
       </nav>
@@ -339,6 +357,8 @@ export default function TableOfContents({
               fallbackNodes={fallbackNodes}
               onNavigate={() => setMobileOpen(false)}
               pasalPrefix={pasalPrefix}
+              pasalAnchorById={pasalAnchorById}
+              pasalItemPrefix={pasalItemPrefix}
               moreArticlesLabel={moreArticlesLabel}
                 />
               </div>

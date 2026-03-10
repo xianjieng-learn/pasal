@@ -313,6 +313,8 @@ async function LawReaderSection({
   const resolvedRels = resolveRelationships(relationships || [], workId, relatedWorks);
 
   const pageUrl = `https://pasal.id/peraturan/${type.toLowerCase()}/${slug}`;
+  const isSema = type.toUpperCase() === "SEMA";
+  const itemPrefix = isSema ? "Nomor" : undefined;
 
   // Build tree structure
   const babNodes = structuralNodes || [];
@@ -371,7 +373,14 @@ async function LawReaderSection({
               )}
 
               {allBabPasals.map((pasal) => (
-                <PasalBlock key={pasal.id} pasal={pasal} pathname={pathname} pageUrl={pageUrl} />
+                <PasalBlock
+                  key={pasal.id}
+                  pasal={pasal}
+                  pathname={pathname}
+                  pageUrl={pageUrl}
+                  itemPrefix={itemPrefix}
+                  anchorById={isSema}
+                />
               ))}
             </section>
           );
@@ -386,10 +395,19 @@ async function LawReaderSection({
               totalPasals={totalPasalCount || 0}
               pathname={pathname}
               pageUrl={pageUrl}
+              itemPrefix={itemPrefix}
+              anchorById={isSema}
             />
           ) : (
             allPasals.map((pasal) => (
-              <PasalBlock key={pasal.id} pasal={pasal} pathname={pathname} pageUrl={pageUrl} />
+              <PasalBlock
+                key={pasal.id}
+                pasal={pasal}
+                pathname={pathname}
+                pageUrl={pageUrl}
+                itemPrefix={itemPrefix}
+                anchorById={isSema}
+              />
             ))
           )}
         </>
@@ -428,6 +446,8 @@ async function LawReaderSection({
           babs={babNodes}
           pasals={allPasals}
           fallbackNodes={allPasals.length > 0 ? leadContentNodes : fallbackContentNodes}
+          pasalAnchorById={isSema}
+          pasalItemPrefix={itemPrefix}
         />
       }
       content={

@@ -24,6 +24,8 @@ interface PasalListProps {
   totalPasals: number;
   pathname: string;
   pageUrl: string;
+  itemPrefix?: string;
+  anchorById?: boolean;
 }
 
 export default function PasalList({
@@ -33,6 +35,8 @@ export default function PasalList({
   totalPasals,
   pathname,
   pageUrl,
+  itemPrefix,
+  anchorById = false,
 }: PasalListProps) {
   const t = useTranslations("reader");
   const [pasals, setPasals] = useState<DocumentNode[]>(initialPasals);
@@ -102,6 +106,8 @@ export default function PasalList({
           pasal={pasal}
           pathname={pathname}
           pageUrl={pageUrl}
+          itemPrefix={itemPrefix}
+          anchorById={anchorById}
         />
       ))}
 
