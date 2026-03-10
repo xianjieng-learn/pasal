@@ -256,6 +256,14 @@ async function LawReaderSection({
   const structuralNodes = structure;
   let pasalNodes = initialPasals;
   const relationships = rels;
+  let fallbackContentNodes: Array<{
+    id: number;
+    node_type: string;
+    number: string;
+    heading: string | null;
+    content_text: string | null;
+    sort_order: number;
+  }> = [];
 
   // For small documents with >30 pasals, fetch the rest
   if (!usePagination && (totalPasalCount || 0) > 30) {
@@ -267,6 +275,18 @@ async function LawReaderSection({
       .order("sort_order")
       .range(30, (totalPasalCount || 100) - 1);
     pasalNodes = [...(initialPasals || []), ...(remaining || [])];
+  }
+
+  // Documents like SEMA/SEKMA may contain rich text but no "pasal" nodes.
+  // Render content-bearing fallback nodes to avoid false empty states.
+  if ((pasalNodes?.length || 0) === 0) {
+    const { data: fallbackNodes } = await supabase
+      .from("document_nodes")
+      .select("id, node_type, number, heading, content_text, sort_order")
+      .eq("work_id", workId)
+      .in("node_type", ["preamble", "content", "aturan", "penjelasan_umum", "penjelasan_pasal"])
+      .order("sort_order");
+    fallbackContentNodes = fallbackNodes || [];
   }
 
   // Get related work info
@@ -346,10 +366,27 @@ async function LawReaderSection({
       )}
 
       {allPasals.length === 0 && (
-        <div className="rounded-lg border p-4 sm:p-8 text-center text-muted-foreground">
-          <PasalLogo size={48} className="mx-auto mb-3 opacity-20" />
-          {t("noContentYet")}
-        </div>
+        <>
+          {fallbackContentNodes.length > 0 ? (
+            <section className="space-y-4">
+              {fallbackContentNodes.map((node) => (
+                <article key={node.id} className="rounded-lg border p-5">
+                  <h3 className="font-heading text-base mb-2">
+                    {node.heading || node.node_type.replaceAll("_", " ").toUpperCase()}
+                  </h3>
+                  <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {node.content_text || ""}
+                  </div>
+                </article>
+              ))}
+            </section>
+          ) : (
+            <div className="rounded-lg border p-4 sm:p-8 text-center text-muted-foreground">
+              <PasalLogo size={48} className="mx-auto mb-3 opacity-20" />
+              {t("noContentYet")}
+            </div>
+          )}
+        </>
       )}
     </>
   );

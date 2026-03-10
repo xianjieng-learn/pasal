@@ -36,7 +36,7 @@ export async function GET(
     .from("document_nodes")
     .select("id, node_type, number, heading, content_text, parent_id, sort_order")
     .eq("work_id", work.id)
-    .in("node_type", ["bab", "pasal"])
+    .in("node_type", ["bab", "pasal", "preamble", "content", "aturan", "penjelasan_umum", "penjelasan_pasal"])
     .order("sort_order");
 
   const { data: relationships } = await supabase
