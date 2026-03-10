@@ -13,9 +13,16 @@ interface TocNode {
   parent_id: number | null;
 }
 
+interface FallbackTocNode {
+  id: number;
+  node_type: string;
+  heading: string | null;
+}
+
 function TocContent({
   babs,
   pasals,
+  fallbackNodes,
   activeId,
   onNavigate,
   pasalPrefix,
@@ -23,6 +30,7 @@ function TocContent({
 }: {
   babs: TocNode[];
   pasals: TocNode[];
+  fallbackNodes?: FallbackTocNode[];
   activeId?: string | null;
   onNavigate?: () => void;
   pasalPrefix: string;
@@ -30,7 +38,33 @@ function TocContent({
 }) {
   // When there are no BABs, show pasals directly
   if (babs.length === 0) {
-    if (pasals.length === 0) return null;
+    if (pasals.length === 0) {
+      if (!fallbackNodes || fallbackNodes.length === 0) return null;
+      return (
+        <ul className="space-y-1 text-sm">
+          {fallbackNodes.map((node, idx) => {
+            const anchorId = `node-${node.id}`;
+            const isActive = activeId === anchorId;
+            return (
+              <li key={node.id}>
+                <a
+                  href={`#${anchorId}`}
+                  onClick={onNavigate}
+                  data-toc-id={anchorId}
+                  className={`block py-1 rounded transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
+                    isActive
+                      ? "text-foreground border-l-2 border-primary pl-2"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {node.heading || `${node.node_type.replaceAll("_", " ").toUpperCase()} ${idx + 1}`}
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      );
+    }
     return (
       <ul className="space-y-1 text-sm">
         {pasals.map((pasal) => {
@@ -122,9 +156,11 @@ function TocContent({
 export default function TableOfContents({
   babs,
   pasals,
+  fallbackNodes = [],
 }: {
   babs: TocNode[];
   pasals: TocNode[];
+  fallbackNodes?: FallbackTocNode[];
 }) {
   const t = useTranslations("toc");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -151,7 +187,7 @@ export default function TableOfContents({
     if (!window.matchMedia("(min-width: 1024px)").matches) return;
 
     const targets = document.querySelectorAll<HTMLElement>(
-      '[id^="bab-"], [id^="pasal-"]'
+      '[id^="bab-"], [id^="pasal-"], [id^="node-"]'
     );
     if (targets.length === 0) return;
 
@@ -226,6 +262,7 @@ export default function TableOfContents({
         <TocContent
           babs={babs}
           pasals={pasals}
+          fallbackNodes={fallbackNodes}
           activeId={activeId}
           pasalPrefix={pasalPrefix}
           moreArticlesLabel={moreArticlesLabel}
@@ -268,12 +305,13 @@ export default function TableOfContents({
                     &times;
                   </button>
                 </div>
-                <TocContent
-                  babs={babs}
-                  pasals={pasals}
-                  onNavigate={() => setMobileOpen(false)}
-                  pasalPrefix={pasalPrefix}
-                  moreArticlesLabel={moreArticlesLabel}
+            <TocContent
+              babs={babs}
+              pasals={pasals}
+              fallbackNodes={fallbackNodes}
+              onNavigate={() => setMobileOpen(false)}
+              pasalPrefix={pasalPrefix}
+              moreArticlesLabel={moreArticlesLabel}
                 />
               </div>
             </div>

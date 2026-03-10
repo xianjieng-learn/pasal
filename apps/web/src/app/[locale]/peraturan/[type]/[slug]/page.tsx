@@ -370,7 +370,7 @@ async function LawReaderSection({
           {fallbackContentNodes.length > 0 ? (
             <section className="space-y-4">
               {fallbackContentNodes.map((node) => (
-                <article key={node.id} className="rounded-lg border p-5">
+                <article key={node.id} id={`node-${node.id}`} className="rounded-lg border p-5 scroll-mt-20">
                   <h3 className="font-heading text-base mb-2">
                     {node.heading || node.node_type.replaceAll("_", " ").toUpperCase()}
                   </h3>
@@ -393,7 +393,7 @@ async function LawReaderSection({
 
   return (
     <ReaderLayout
-      toc={<TableOfContents babs={babNodes} pasals={allPasals} />}
+      toc={<TableOfContents babs={babNodes} pasals={allPasals} fallbackNodes={fallbackContentNodes} />}
       content={
         <>
           <HashHighlighter />
