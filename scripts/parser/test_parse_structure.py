@@ -45,3 +45,40 @@ Dalam Undang-Undang ini yang dimaksud dengan:
     assert any(n["type"] == "bab" for n in nodes)
     bab = next(n for n in nodes if n["type"] == "bab")
     assert any(c["type"] == "pasal" for c in bab["children"])
+
+
+def test_parse_pleno_kamar_with_hasil_rumusan_prefix():
+    text = """
+A. HASIL RUMUSAN KAMAR PIDANA
+1. Satu.
+2. Dua.
+
+B. HASIL RUMUSAN KAMAR PERDATA
+1. Tiga.
+""".strip()
+
+    nodes = parse_structure(text)
+    kamar_nodes = [n for n in nodes if n["type"] == "bagian"]
+    assert [k["number"] for k in kamar_nodes] == ["PIDANA", "PERDATA"]
+    assert [c["number"] for c in kamar_nodes[0]["children"]] == ["1", "2"]
+
+
+def test_parse_roman_outline_document():
+    text = """
+SURAT EDARAN
+I.
+KETENTUAN UMUM
+1. Ketentuan pertama.
+2. Ketentuan kedua.
+II.
+PELAKSANAAN
+1. Ketentuan ketiga.
+""".strip()
+
+    nodes = parse_structure(text)
+    assert nodes[0]["type"] == "preamble"
+    sections = [n for n in nodes if n["type"] == "bagian"]
+    assert len(sections) == 2
+    assert sections[0]["number"] == "I"
+    assert sections[0]["heading"] == "KETENTUAN UMUM"
+    assert [c["number"] for c in sections[0]["children"]] == ["1", "2"]

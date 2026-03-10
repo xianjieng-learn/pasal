@@ -28,11 +28,16 @@ LAMPIRAN_RE = re.compile(r'^\s*LAMPIRAN\s*$', re.MULTILINE)
 
 # SEMA / Rumusan pleno kamar style sections
 KAMAR_RE = re.compile(
-    r'^\s*(?:KAMAR\s+)?(PERDATA|PIDANA|AGAMA|TUN|MILITER|TATA\s+USAHA\s+NEGARA)\s*$',
+    r'^\s*(?:[A-Za-z]{1,2}\.\s*)?(?:HASIL\s+RUMUSAN\s+)?(?:KAMAR\s+)?'
+    r'(PERDATA|PIDANA|AGAMA|TUN|MILITER|KESEKRETARIATAN|TATA\s+USAHA\s+NEGARA)\s*$',
     re.MULTILINE | re.IGNORECASE,
 )
 RUMUSAN_NUM_RE = re.compile(r'^\s*(?:RUMUSAN\s+)?(?:\(?\s*(\d{1,3})\s*\)|\s*(\d{1,3})[\.)])\s+', re.MULTILINE | re.IGNORECASE)
 RUMUSAN_PREAMBLE_HINT_RE = re.compile(r'RUMUSAN\s+HASIL\s+RAPAT\s+PLENO\s+KAMAR', re.IGNORECASE)
+ROMAN_SECTION_RE = re.compile(
+    r'^\s*([IVXLCDMIL]{1,7})\.\s*(?:\n\s*([A-Z][A-Z0-9 ,\-/()]{3,})|([A-Z][A-Z0-9 ,\-/()]{3,}))\s*$',
+    re.MULTILINE | re.IGNORECASE,
+)
 
 # UUD 1945 special sections: ATURAN PERALIHAN and ATURAN TAMBAHAN
 # These act as top-level sections (like BAB) but without BAB numbering.
@@ -461,6 +466,84 @@ def _is_pleno_kamar_document(text: str) -> bool:
     return kamar_count >= 2 and has_numbered_rumusan and not has_bab
 
 
+def _is_roman_outline_document(text: str) -> bool:
+    """Detect non-UU documents organized by Roman sections (I., II., ...)."""
+    if BAB_RE.search(text) or PASAL_RE.search(text):
+        return False
+    return len(list(ROMAN_SECTION_RE.finditer(text))) >= 2
+
+
+def _normalize_roman(raw: str) -> str:
+    cleaned = ''.join(ch for ch in raw.upper() if ch.isalpha())
+    # OCR often emits "ILL"/"IlI" for "III"
+    cleaned = cleaned.replace('L', 'I')
+    return cleaned
+
+
+def _parse_roman_outline(text: str) -> list[dict]:
+    """Parse Roman-outline documents into preamble -> bagian -> pasal(items)."""
+    nodes: list[dict] = []
+    sort_order = 0
+    section_matches = list(ROMAN_SECTION_RE.finditer(text))
+    if not section_matches:
+        return []
+
+    preamble = text[:section_matches[0].start()].strip()
+    if preamble:
+        nodes.append({
+            "type": "preamble",
+            "number": "",
+            "heading": "",
+            "content": _rejoin_content_lines(preamble),
+            "children": [],
+            "sort_order": sort_order,
+        })
+        sort_order += 1
+
+    for i, sm in enumerate(section_matches):
+        section_num = _normalize_roman(sm.group(1))
+        section_title = ' '.join(((sm.group(2) or sm.group(3) or "").split()))
+        next_start = section_matches[i + 1].start() if i + 1 < len(section_matches) else len(text)
+        section_body = text[sm.end():next_start].strip()
+
+        section_node = {
+            "type": "bagian",
+            "number": section_num,
+            "heading": section_title or f"Bagian {section_num}",
+            "content": "",
+            "children": [],
+            "sort_order": sort_order,
+        }
+        sort_order += 1
+
+        items = _split_rumusan_items(section_body)
+        if items:
+            for num, body in items:
+                section_node["children"].append({
+                    "type": "pasal",
+                    "number": num,
+                    "heading": f"Rumusan {num}",
+                    "content": _rejoin_content_lines(body),
+                    "children": [],
+                    "sort_order": sort_order,
+                })
+                sort_order += 1
+        elif section_body:
+            section_node["children"].append({
+                "type": "pasal",
+                "number": "1",
+                "heading": "Rumusan 1",
+                "content": _rejoin_content_lines(section_body),
+                "children": [],
+                "sort_order": sort_order,
+            })
+            sort_order += 1
+
+        nodes.append(section_node)
+
+    return nodes
+
+
 def _parse_pleno_kamar(text: str) -> list[dict]:
     """Parse plenary-rumusan structure: preamble -> kamar -> rumusan items.
 
@@ -535,6 +618,8 @@ def parse_structure(text: str) -> list[dict]:
     # SEMA / plenary-rumusan docs should be grouped by kamar, not BAB.
     if _is_pleno_kamar_document(text):
         return _parse_pleno_kamar(text)
+    if _is_roman_outline_document(text):
+        return _parse_roman_outline(text)
 
     # Split off penjelasan
     penjelasan_match = PENJELASAN_RE.search(text)
